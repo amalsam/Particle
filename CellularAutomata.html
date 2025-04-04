@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conway's Game of Life</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+
+        #grid {
+            background-color: white;
+            border: 1px solid #ccc;
+        }
+
+        .controls {
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .stats {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Conway's Game of Life</h1>
+    
+    <div class="controls">
+        <button onclick="start()">Start</button>
+        <button onclick="stop()">Stop</button>
+        <button onclick="clearGrid()">Clear</button>
+        <button onclick="randomize()">Random</button>
+        Speed: <input type="range" id="speed" min="50" max="1000" value="100">
+    </div>
+
+    <canvas id="grid"></canvas>
+
+    <div class="stats">
+        Generation: <span id="generation">0</span> | 
+        Population: <span id="population">0</span>
+    </div>
+
+    <script>
+        const CELL_SIZE = 10;
+        const GRID_COLOR = '#ccc';
+        const CELL_COLOR = '#000';
+        
+        let canvas = document.getElementById('grid');
+        let ctx = canvas.getContext('2d');
+        let width = 50;
+        let height = 50;
+        let grid = [];
+        let isRunning = false;
+        let generation = 0;
+        let intervalId = null;
+
+        // Initialize grid
+        canvas.width = width * CELL_SIZE;
+        canvas.height = height * CELL_SIZE;
+
+        class CellGrid {
+            constructor() {
+                this.grid = Array(width).fill().map(() => Array(height).fill(0));
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw cells
+                for (let x = 0; x < width; x++) {
+                    for (let y = 0; y < height; y++) {
+                        if (this.grid[x][y]) {
+                            ctx.fillStyle = CELL_COLOR;
+                            ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
+                        }
+                    }
+                }
+
+                // Draw grid lines
+                ctx.strokeStyle = GRID_COLOR;
+                for (let x = 0; x <= width; x++) {
+                    ctx.beginPath();
+                    ctx.moveTo(x * CELL_SIZE, 0);
+                    ctx.lineTo(x * CELL_SIZE, canvas.height);
+                    ctx.stroke();
+                }
+                for (let y = 0; y <= height; y++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y * CELL_SIZE);
+                    ctx.lineTo(canvas.width, y * CELL_SIZE);
+                    ctx.stroke();
+                }
+            }
+
+            nextGeneration() {
+                const newGrid = Array(width).fill().map(() => Array(height).fill(0));
+                
+                for (let x = 0; x < width; x++) {
+                    for (let y = 0; y < height; y++) {
+                        const neighbors = this.countNeighbors(x, y);
+                        
+                        if (this.grid[x][y]) {
+                            newGrid[x][y] = (neighbors === 2 || neighbors === 3) ? 1 : 0;
+                        } else {
+                            newGrid[x][y] = neighbors === 3 ? 1 : 0;
+                        }
+                    }
+                }
+                
+                this.grid = newGrid;
+                generation++;
+                this.updateStats();
+            }
+
+            countNeighbors(x, y) {
+                let count = 0;
+                for (let i = -1; i <= 1; i++) {
+                    for (let j = -1; j <= 1; j++) {
+                        if (i === 0 && j === 0) continue;
+                        const newX = x + i;
+                        const newY = y + j;
+                        if (newX >= 0 && newX < width && newY >= 0 && newY < height) {
+                            count += this.grid[newX][newY];
+                        }
+                    }
+                }
+                return count;
+            }
+
+            updateStats() {
+                document.getElementById('generation').textContent = generation;
+                document.getElementById('population').textContent = 
+                    this.grid.flat().reduce((a, b) => a + b);
+            }
+        }
+
+        const cellGrid = new CellGrid();
+
+        // Event Listeners
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / CELL_SIZE);
+            const y = Math.floor((e.clientY - rect.top) / CELL_SIZE);
+            cellGrid.grid[x][y] = cellGrid.grid[x][y] ? 0 : 1;
+            cellGrid.draw();
+        });
+
+        document.getElementById('speed').addEventListener('input', (e) => {
+            if (isRunning) {
+                stop();
+                start();
+            }
+        });
+
+        // Controls
+        function start() {
+            if (!isRunning) {
+                isRunning = true;
+                intervalId = setInterval(() => {
+                    cellGrid.nextGeneration();
+                    cellGrid.draw();
+                }, document.getElementById('speed').value);
+            }
+        }
+
+        function stop() {
+            isRunning = false;
+            clearInterval(intervalId);
+        }
+
+        function clearGrid() {
+            stop();
+            generation = 0;
+            cellGrid.grid = Array(width).fill().map(() => Array(height).fill(0));
+            cellGrid.draw();
+            cellGrid.updateStats();
+        }
+
+        function randomize() {
+            stop();
+            cellGrid.grid = cellGrid.grid.map(col => 
+                col.map(() => Math.random() > 0.85 ? 1 : 0)
+            );
+            cellGrid.draw();
+            cellGrid.updateStats();
+        }
+
+        // Initial draw
+        cellGrid.draw();
+    </script>
+</body>
+</html>
