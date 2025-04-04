@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gravitational Particle Simulation</title>
+  <style>
+    body { margin: 0; background-color: #141414; color: white; font-family: sans-serif; }
+    canvas { display: block; }
+    #info { position: absolute; top: 10px; left: 10px; color: white; z-index: 1; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px;
+      border-radius: 8px;
+    }
+    #controls label {
+      display: block;
+      margin: 5px 0 2px;
+    }
+    #controls input {
+      width: 60px;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">Particles: <span id="particleCount">0</span></div>
+  <div id="controls">
+    <label>G: <input type="number" id="gInput" value="1" step="0.1"></label>
+    <label>MASS: <input type="number" id="massInput" value="1" step="1"></label>
+    <label>RADIUS: <input type="number" id="radiusInput" value="4" step="1"></label>
+    <label>DT: <input type="number" id="dtInput" value="0.5" step="0.1"></label>
+  </div>
+  <canvas id="canvas"></canvas>
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let G = parseFloat(document.getElementById("gInput").value);
+    let MASS = parseFloat(document.getElementById("massInput").value);
+    let RADIUS = parseFloat(document.getElementById("radiusInput").value);
+    let DT = parseFloat(document.getElementById("dtInput").value);
+
+    document.getElementById("gInput").addEventListener("input", (event) => G = parseFloat(event.target.value));
+    document.getElementById("massInput").addEventListener("input", (event) => MASS = parseFloat(event.target.value));
+    document.getElementById("radiusInput").addEventListener("input", (event) => RADIUS = parseFloat(event.target.value));
+    document.getElementById("dtInput").addEventListener("input", (event) => DT = parseFloat(event.target.value));
+
+    const particles = [];
+
+    class Particle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.momentumX = 0;
+        this.momentumY = 0;
+        this.color = "white";
+      }
+
+      move(neighbors) {
+        for (let other of neighbors) {
+          if (other === this) continue;
+          const dx = other.x - this.x;
+          const dy = other.y - this.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 1) continue;
+
+          const theta = Math.atan2(dy, dx);
+          const force = (G * MASS * MASS) / dist;
+          const forceX = force * Math.cos(theta);
+          const forceY = force * Math.sin(theta);
+
+          this.momentumX += forceX * DT;
+          this.momentumY += forceY * DT;
+        }
+
+        this.x += (this.momentumX / MASS) * DT;
+        this.y += (this.momentumY / MASS) * DT;
+      }
+
+      resolveCollision(other) {
+        const dx = other.x - this.x;
+        const dy = other.y - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < RADIUS * 2) {
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          const dvx = this.momentumX - other.momentumX;
+          const dvy = this.momentumY - other.momentumY;
+          const dot = dvx * nx + dvy * ny;
+
+          //if (dot > 0) return;
+
+          const impulse = (2 * dot) / (MASS + MASS);
+
+          this.momentumX -= impulse * MASS * nx;
+          this.momentumY -= impulse * MASS * ny;
+          other.momentumX += impulse * MASS * nx;
+          other.momentumY += impulse * MASS * ny;
+        }
+      }
+
+      draw() {
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    class Grid {
+      constructor(cellSize) {
+        this.cellSize = cellSize;
+        this.cells = new Map();
+      }
+
+      getKey(x, y) {
+        const cx = Math.floor(x / this.cellSize);
+        const cy = Math.floor(y / this.cellSize);
+        return `${cx},${cy}`;
+      }
+
+      insert(particle) {
+        const key = this.getKey(particle.x, particle.y);
+        if (!this.cells.has(key)) {
+          this.cells.set(key, []);
+        }
+        this.cells.get(key).push(particle);
+      }
+
+      queryNeighbors(particle) {
+        const neighbors = [];
+        const cx = Math.floor(particle.x / this.cellSize);
+        const cy = Math.floor(particle.y / this.cellSize);
+
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            const key = `${cx + dx},${cy + dy}`;
+            if (this.cells.has(key)) {
+              neighbors.push(...this.cells.get(key));
+            }
+          }
+        }
+
+        return neighbors;
+      }
+
+      clear() {
+        this.cells.clear();
+      }
+    }
+
+    const grid = new Grid(150);
+
+    function generateCircle(x, y) {
+      for (let i = 0; i < 50; i++) {
+        const angle = Math.random() * 2 * Math.PI;
+        const radius = Math.sqrt(Math.random()) * 50;
+        const px = x + Math.cos(angle) * radius;
+        const py = y + Math.sin(angle) * radius;
+        particles.push(new Particle(px, py));
+      }
+    }
+
+    function generateFull(x, y) {
+      for (let i = 0; i < 100; i++) {
+        
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        particles.push(new Particle(x, y));
+      }
+    }
+
+    function generateLine(y) {
+      for (let i = 0; i < 100; i++) {
+        const x = Math.random() * canvas.width;
+        particles.push(new Particle(x, y));
+      }
+    }
+
+    function generateLine2(x) {
+      for (let i = 0; i < 100; i++) {
+        const y = Math.random() * canvas.height;
+        particles.push(new Particle(x, y));
+      }
+    }
+
+    canvas.addEventListener("mousedown", (e) => {
+      if (e.button === 0) {
+        particles.push(new Particle(e.clientX, e.clientY));
+      }
+    });
+
+    let mouseX = 0;
+    let mouseY = 0;
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "1") generateLine(mouseY);
+      if (e.key === "2") generateCircle(mouseX, mouseY);
+      if (e.key === "3") generateLine2(mouseX);
+      if (e.key === "4") generateFull();  
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+
+    function animate() {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      grid.clear();
+      for (const p of particles) {
+        grid.insert(p);
+      }
+
+      for (let i = 0; i < particles.length; i++) {
+        const p1 = particles[i];
+        const neighbors = grid.queryNeighbors(p1);
+        p1.move(neighbors);
+        for (let j = 0; j < neighbors.length; j++) {
+          const p2 = neighbors[j];
+          if (p1 !== p2) p1.resolveCollision(p2);
+        }
+        p1.draw();
+      }
+
+      document.getElementById("particleCount").textContent = particles.length;
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
