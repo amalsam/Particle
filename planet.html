@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stellar Voyager: 3D Solar System</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+        }
+
+        #canvasContainer {
+            position: relative;
+        }
+
+        canvas {
+            background: #000;
+        }
+
+        .controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            color: #fff;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+
+        button {
+            padding: 10px 20px;
+            background: linear-gradient(45deg, #2196F3, #673AB7);
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 8px;
+            margin: 5px;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button onclick="toggleRotation()">⏯️ Toggle Spin</button>
+        <button onclick="resetCamera()">🌌 Reset View</button>
+    </div>
+    <div id="canvasContainer">
+        <canvas id="simCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        const SCALE_FACTOR = 0.00000005;
+        const ROTATION_SPEED = 0.002;
+        let planets = [];
+        let sun;
+        let autoRotate = true;
+        let camera = { x: 0, y: 0, distance: 1000 };
+        let mouseDown = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        class CelestialBody {
+            constructor(name, radius, distance, speed, color, glowColor) {
+                this.name = name;
+                this.radius = radius;
+                this.distance = distance * SCALE_FACTOR;
+                this.angle = Math.random() * Math.PI * 2;
+                this.speed = speed;
+                this.color = color;
+                this.glowColor = glowColor;
+                this.rotation = 0;
+            }
+
+            update() {
+                this.angle += this.speed;
+                this.rotation += 0.02;
+            }
+
+            getPosition() {
+                return {
+                    x: Math.cos(this.angle) * this.distance,
+                    z: Math.sin(this.angle) * this.distance,
+                    y: Math.sin(this.angle * 2) * this.distance * 0.2
+                };
+            }
+        }
+
+        function createSolarSystem() {
+            sun = {
+                radius: 50,
+                color: '#FFD700',
+                glowColor: 'rgba(255, 215, 0, 0.5)'
+            };
+
+            planets = [
+                new CelestialBody('Mercury', 8, 58, 0.07, '#A0522D', '#FFA07A'),
+                new CelestialBody('Venus', 12, 108, 0.05, '#DEB887', '#FFDEAD'),
+                new CelestialBody('Earth', 14, 150, 0.04, '#4169E1', '#87CEEB'),
+                new CelestialBody('Mars', 10, 228, 0.03, '#CD5C5C', '#FF6347'),
+                new CelestialBody('Jupiter', 30, 778, 0.02, '#DAA520', '#FFD700'),
+                new CelestialBody('Saturn', 25, 1433, 0.015, '#F4A460', '#FFA500'),
+                new CelestialBody('Uranus', 18, 2872, 0.01, '#87CEEB', '#AFEEEE'),
+                new CelestialBody('Neptune', 17, 4495, 0.008, '#4682B4', '#00BFFF')
+            ];
+        }
+
+        function drawBody(x, y, size, color, glowColor) {
+            // Glow effect
+            const gradient = ctx.createRadialGradient(
+                x, y, size * 0.1,
+                x, y, size * 3
+            );
+            gradient.addColorStop(0, glowColor);
+            gradient.addColorStop(1, 'transparent');
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(x, y, size * 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Main body
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 3D lighting effect
+            const gradient2 = ctx.createRadialGradient(
+                x - size/2, y - size/2, size/4, 
+                x, y, size
+            );
+            gradient2.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+            gradient2.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            
+            ctx.fillStyle = gradient2;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw stars
+            for(let i = 0; i < 1000; i++) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5})`;
+                ctx.beginPath();
+                ctx.arc(
+                    Math.random() * width,
+                    Math.random() * height,
+                    Math.random() * 1.5,
+                    0, Math.PI * 2
+                );
+                ctx.fill();
+            }
+
+            // Center point (Sun)
+            const centerX = width/2 + camera.x;
+            const centerY = height/2 + camera.y;
+            
+            // Draw Sun
+            drawBody(centerX, centerY, sun.radius, sun.color, sun.glowColor);
+
+            // Draw planets
+            planets.forEach(planet => {
+                const pos = planet.getPosition();
+                const scale = camera.distance / (camera.distance + pos.z);
+                
+                const x = centerX + pos.x * scale;
+                const y = centerY + pos.y * scale;
+                const size = planet.radius * scale;
+
+                drawBody(x, y, size, planet.color, planet.glowColor);
+            });
+        }
+
+        function animate() {
+            if(autoRotate) {
+                camera.x = Math.sin(Date.now() * 0.0005) * 300;
+                camera.y = Math.cos(Date.now() * 0.0005) * 300;
+            }
+
+            planets.forEach(planet => planet.update());
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        function toggleRotation() {
+            autoRotate = !autoRotate;
+        }
+
+        function resetCamera() {
+            camera = { x: 0, y: 0, distance: 1000 };
+        }
+
+        // Event handlers
+        canvas.addEventListener('mousedown', (e) => {
+            mouseDown = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if(mouseDown) {
+                camera.x += (e.clientX - lastX) * 2;
+                camera.y += (e.clientY - lastY) * 2;
+                lastX = e.clientX;
+                lastY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => mouseDown = false);
+        canvas.addEventListener('mouseleave', () => mouseDown = false);
+
+        canvas.addEventListener('wheel', (e) => {
+            camera.distance *= e.deltaY > 0 ? 0.9 : 1.1;
+            e.preventDefault();
+        }, { passive: false });
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        });
+
+        // Initialize and start
+        createSolarSystem();
+        animate();
+    </script>
+</body>
+</html>

@@ -265,7 +265,7 @@
         <div class="control-group">
             <h3 style="color: #9C27B0;">Presets & Tools</h3>
             <div id="presets">
-                <button onclick="generateCircle(mouseX, mouseY)">Spawn Circle</button>
+                <button onclick="generateCircle(canvas.width / 2, canvas.height / 2)">Spawn Circle</button>
                 <button onclick="generateFull()">Random Cloud</button>
                 <button onclick="clearParticles()">Clear All</button>
                 <button onclick="toggleRainbow()">Rainbow Mode</button>
@@ -347,7 +347,7 @@
             }
         }
 
-        const grid = new Grid(150);
+        const grid = new Grid(700);
 
         class Particle {
             constructor(x, y) {
@@ -561,10 +561,10 @@
             }
         });
 
-        window.addEventListener("keydown", (e) => {
-            if (e.key === "1") generateCircle(mouseX, mouseY);
-            if (e.key === "2") generateFull();
-        });
+        // window.addEventListener("keydown", (e) => {
+        //     if (e.key === "1") generateCircle(mouseX, mouseY);
+        //     if (e.key === "2") generateFull();
+        // });
 
         canvas.addEventListener("mousemove", (e) => {
             mouseX = e.clientX;

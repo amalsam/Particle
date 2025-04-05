@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Particle Web Simulator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            touch-action: none;
+            position: relative;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #controls {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 768px) {
+            #controls {
+                bottom: 0;
+                left: 0;
+                right: 0;
+                top: auto !important;
+                width: 100% !important;
+                border-radius: 20px 20px 0 0;
+                max-height: 40vh;
+            }
+
+            #canvas-container {
+                height: calc(100% - 40vh);
+            }
+        }
+
+        @media (min-width: 769px) {
+            #controls {
+                top: 20px;
+                right: 20px;
+                width: 300px;
+                max-height: 90vh;
+            }
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        label {
+            display: block;
+            margin: 8px 0;
+            font-size: 0.9em;
+            color: #ccc;
+        }
+
+        input[type="number"], input[type="range"] {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px;
+            border-radius: 8px;
+            margin: 6px 0;
+        }
+
+        button {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            border: none;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 6px 0;
+            width: 100%;
+        }
+
+        .color-picker {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .color-option {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .color-option.active {
+            border-color: white;
+            box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+        }
+
+        #presets {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        #info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 12px 20px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Particles: <span id="particleCount">0</span></div>
+    <div id="controls">
+        <div class="control-group">
+            <h3 style="color: #4CAF50;">Physics</h3>
+            <label>Gravity (G): <input type="number" id="gInput" value="0" step="0.1"></label>
+            <label>Time Step (DT): <input type="number" id="dtInput" value="0.5" step="0.1"></label>
+            <label>Particle Mass: <input type="range" id="massInput" min="1" max="10" value="1"></label>
+        </div>
+
+        <div class="control-group">
+            <h3 style="color: #2196F3;">Web</h3>
+            <label>Spring Stiffness: <input type="range" id="stiffnessInput" min="0" max="1" step="0.01" value="0.1"></label>
+            <label>Spring Damping: <input type="range" id="dampingInput" min="0" max="0.2" step="0.01" value="0.05"></label>
+            <label>Connection Chance: <input type="range" id="connectionInput" min="0" max="1" step="0.1" value="0.3"></label>
+        </div>
+
+        <div class="control-group">
+            <h3 style="color: #9C27B0;">Tools</h3>
+            <div id="presets">
+                <button onclick="generateWeb()">Create Web</button>
+                <button onclick="clearParticles()">Clear All</button>
+                <button onclick="toggleRainbow()">Rainbow Mode</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        let particles = [];
+        let mouseX = 0, mouseY = 0;
+        let isDragging = false;
+        let selectedParticle = null;
+
+        // Physics parameters
+        let G = 0;
+        let MASS = 1;
+        let DT = 0.5;
+        let SPRING_STIFFNESS = 0.1;
+        let SPRING_DAMPING = 0.05;
+        let CONNECTION_CHANCE = 0.3;
+        let RAINBOW_MODE = false;
+        let PARTICLE_COLOR = "#ffffff";
+
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.momentumX = 0;
+                this.momentumY = 0;
+                this.connections = [];
+                this.color = PARTICLE_COLOR;
+            }
+
+            addConnection(particle) {
+                if (!this.connections.includes(particle)) {
+                    this.connections.push(particle);
+                    particle.connections.push(this);
+                }
+            }
+
+            update(particles) {
+                // Spring forces
+                this.connections.forEach(connected => {
+                    if (!particles.includes(connected)) return;
+                    
+                    const dx = connected.x - this.x;
+                    const dy = connected.y - this.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    const targetDist = 60;
+                    
+                    // Spring force
+                    const force = SPRING_STIFFNESS * (dist - targetDist);
+                    const fx = (dx / dist) * force;
+                    const fy = (dy / dist) * force;
+                    
+                    // Damping
+                    const dvx = connected.momentumX - this.momentumX;
+                    const dvy = connected.momentumY - this.momentumY;
+                    const dampingX = SPRING_DAMPING * dvx;
+                    const dampingY = SPRING_DAMPING * dvy;
+
+                    this.momentumX += (fx + dampingX) * DT;
+                    this.momentumY += (fy + dampingY) * DT;
+                });
+
+                // Gravity
+                particles.forEach(other => {
+                    if(other === this) return;
+                    const dx = other.x - this.x;
+                    const dy = other.y - this.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if(dist < 1) return;
+
+                    const force = (G * MASS * MASS) / dist;
+                    const angle = Math.atan2(dy, dx);
+                    
+                    this.momentumX += Math.cos(angle) * force * DT;
+                    this.momentumY += Math.sin(angle) * force * DT;
+                });
+
+                // Update position
+                this.x += (this.momentumX / MASS) * DT;
+                this.y += (this.momentumY / MASS) * DT;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 4, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            drawConnections() {
+                this.connections.forEach(connected => {
+                    if (!particles.includes(connected)) return;
+                    ctx.beginPath();
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 * (1 - Math.hypot(connected.x-this.x, connected.y-this.y)/150)})`;
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(connected.x, connected.y);
+                    ctx.stroke();
+                });
+            }
+        }
+
+        // Simulation functions
+        function generateWeb() {
+            particles = [];
+            const count = 50;
+            const spread = Math.min(canvas.width, canvas.height) * 0.4;
+            
+            for(let i = 0; i < count; i++) {
+                const angle = (i / count) * Math.PI * 2;
+                const x = canvas.width/2 + Math.cos(angle)*spread;
+                const y = canvas.height/2 + Math.sin(angle)*spread;
+                const particle = new Particle(x, y);
+                
+                // Connect to nearby particles
+                particles.forEach(p => {
+                    if(Math.random() < CONNECTION_CHANCE) {
+                        particle.addConnection(p);
+                    }
+                });
+                
+                particles.push(particle);
+            }
+        }
+
+        function clearParticles() {
+            particles = [];
+        }
+
+        function toggleRainbow() {
+            RAINBOW_MODE = !RAINBOW_MODE;
+        }
+
+        // Event handlers
+        canvas.addEventListener("mousedown", e => {
+            isDragging = true;
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+            
+            // Find nearest particle
+            selectedParticle = particles.reduce((closest, p) => {
+                const dist = Math.hypot(p.x - mouseX, p.y - mouseY);
+                return dist < 30 && dist < closest.dist ? {particle: p, dist} : closest;
+            }, {dist: Infinity}).particle;
+        });
+
+        canvas.addEventListener("mousemove", e => {
+            if(!isDragging || !selectedParticle) return;
+            const rect = canvas.getBoundingClientRect();
+            selectedParticle.x = e.clientX - rect.left;
+            selectedParticle.y = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener("mouseup", () => {
+            isDragging = false;
+            selectedParticle = null;
+        });
+
+        // Control bindings
+        document.getElementById("gInput").addEventListener("input", e => G = parseFloat(e.target.value));
+        document.getElementById("massInput").addEventListener("input", e => MASS = parseFloat(e.target.value));
+        document.getElementById("dtInput").addEventListener("input", e => DT = parseFloat(e.target.value));
+        document.getElementById("stiffnessInput").addEventListener("input", e => SPRING_STIFFNESS = parseFloat(e.target.value));
+        document.getElementById("dampingInput").addEventListener("input", e => SPRING_DAMPING = parseFloat(e.target.value));
+        document.getElementById("connectionInput").addEventListener("input", e => CONNECTION_CHANCE = parseFloat(e.target.value));
+
+        // Animation loop
+        function animate() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.1)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw connections
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 1;
+            particles.forEach(p => p.drawConnections());
+
+            // Update and draw particles
+            particles.forEach(p => {
+                p.update(particles);
+                if(RAINBOW_MODE) p.color = `hsl(${Math.random()*360}, 100%, 50%)`;
+                p.draw();
+            });
+
+            document.getElementById("particleCount").textContent = particles.length;
+            requestAnimationFrame(animate);
+        }
+
+        // Init
+        function handleResize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener("resize", handleResize);
+        handleResize();
+        animate();
+    </script>
+</body>
+</html>

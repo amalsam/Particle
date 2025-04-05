@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Network Processing Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a1a;
+            font-family: 'Segoe UI', sans-serif;
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            display: flex;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .draw-area {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        #drawCanvas {
+            background: #000;
+            border: 2px solid #3a3a3a;
+            border-radius: 8px;
+            cursor: crosshair;
+        }
+
+        .network-viz {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            min-width: 600px;
+            position: relative;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .prediction {
+            margin-top: 20px;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .network {
+            display: flex;
+            justify-content: space-between;
+            height: 400px;
+        }
+
+        .layer {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .neuron {
+            width: 30px;
+            height: 30px;
+            background: #3a3a3a;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .status {
+            margin-top: 10px;
+            color: #4CAF50;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Neural Network Processing Demo</h1>
+    <div class="container">
+        <div class="draw-area">
+            <canvas id="drawCanvas" width="280" height="280"></canvas>
+            <div class="controls">
+                <button id="clearBtn">Clear</button>
+                <button id="recognizeBtn">Recognize</button>
+            </div>
+        </div>
+
+        <div class="network-viz">
+            <div class="network" id="network"></div>
+            <canvas class="connections" id="connections"></canvas>
+            <div class="status" id="status">Ready</div>
+            <div class="prediction" id="prediction">Prediction: -</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawCanvas');
+        const ctx = canvas.getContext('2d');
+        const networkDiv = document.getElementById('network');
+        const connectionsCanvas = document.getElementById('connections');
+        const statusDiv = document.getElementById('status');
+        const predictionDiv = document.getElementById('prediction');
+
+        // Neural network configuration
+        const layers = [784, 128, 10]; // Input, Hidden, Output
+        let network = [];
+        let connections = [];
+
+        // Initialize network
+        function initNetwork() {
+            networkDiv.innerHTML = '';
+            connections = [];
+            
+            // Create layers
+            layers.forEach((neurons, layerIndex) => {
+                const layer = document.createElement('div');
+                layer.className = 'layer';
+                
+                // Create neurons
+                for(let i = 0; i < neurons; i++) {
+                    const neuron = document.createElement('div');
+                    neuron.className = 'neuron';
+                    layer.appendChild(neuron);
+                }
+                networkDiv.appendChild(layer);
+                
+                // Initialize network data
+                network[layerIndex] = Array(neurons).fill(0);
+            });
+
+            // Initialize connections
+            for(let i = 0; i < layers.length - 1; i++) {
+                connections[i] = [];
+                for(let j = 0; j < layers[i]; j++) {
+                    connections[i][j] = Array(layers[i+1]).fill().map(() => 
+                        Math.random() * 2 - 1 // Random weights between -1 and 1
+                    );
+                }
+            }
+
+            drawConnections();
+        }
+
+        // Draw connections between layers
+        function drawConnections() {
+            const ctx = connectionsCanvas.getContext('2d');
+            ctx.clearRect(0, 0, connectionsCanvas.width, connectionsCanvas.height);
+            
+            const layers = networkDiv.children;
+            
+            for(let i = 0; i < layers.length - 1; i++) {
+                const currentLayer = layers[i].children;
+                const nextLayer = layers[i+1].children;
+                
+                for(let j = 0; j < currentLayer.length; j++) {
+                    const startPos = getPosition(currentLayer[j]);
+                    for(let k = 0; k < nextLayer.length; k++) {
+                        const endPos = getPosition(nextLayer[k]);
+                        const weight = connections[i][j][k];
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(startPos.x, startPos.y);
+                        ctx.lineTo(endPos.x, endPos.y);
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.abs(weight)/2})`;
+                        ctx.lineWidth = Math.abs(weight) * 2;
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function getPosition(element) {
+            const rect = element.getBoundingClientRect();
+            return {
+                x: rect.left + rect.width/2 - networkDiv.getBoundingClientRect().left,
+                y: rect.top + rect.height/2 - networkDiv.getBoundingClientRect().top
+            };
+        }
+
+        // Drawing functionality
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.lineWidth = 15;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'white';
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function draw(e) {
+            if(!isDrawing) return;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.stroke();
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            predictionDiv.textContent = 'Prediction: -';
+            statusDiv.textContent = 'Ready';
+            resetNetwork();
+        });
+
+        // Neural network processing
+        async function processImage() {
+            statusDiv.textContent = 'Processing...';
+            
+            // Convert drawing to input data
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = 28;
+            tempCanvas.height = 28;
+            tempCtx.drawImage(canvas, 0, 0, 28, 28);
+            const imageData = tempCtx.getImageData(0, 0, 28, 28);
+            
+            // Convert to input array
+            const input = [];
+            for(let i = 0; i < imageData.data.length; i += 4) {
+                input.push(imageData.data[i] / 255);
+            }
+            
+            // Simulate neural network processing
+            let currentActivations = input;
+            await visualizeLayer(0, currentActivations);
+            
+            for(let i = 0; i < layers.length - 1; i++) {
+                statusDiv.textContent = `Processing layer ${i+1}...`;
+                currentActivations = processLayer(currentActivations, i);
+                await visualizeLayer(i+1, currentActivations);
+            }
+            
+            // Get prediction
+            const prediction = currentActivations.indexOf(Math.max(...currentActivations));
+            predictionDiv.textContent = `Prediction: ${prediction}`;
+            statusDiv.textContent = 'Complete!';
+        }
+
+        function processLayer(inputs, layerIndex) {
+            // Simulated neural network layer processing
+            const outputs = [];
+            for(let i = 0; i < layers[layerIndex+1]; i++) {
+                let sum = 0;
+                for(let j = 0; j < layers[layerIndex]; j++) {
+                    sum += inputs[j] * connections[layerIndex][j][i];
+                }
+                outputs[i] = 1 / (1 + Math.exp(-sum)); // Sigmoid activation
+            }
+            return outputs;
+        }
+
+        async function visualizeLayer(layerIndex, activations) {
+            const layer = networkDiv.children[layerIndex].children;
+            for(let i = 0; i < layer.length; i++) {
+                const activation = activations[i];
+                layer[i].style.background = `hsl(120, 70%, ${50 + activation * 50}%)`;
+                layer[i].style.boxShadow = `0 0 ${activation * 20}px hsl(120, 70%, 50%)`;
+                await new Promise(r => setTimeout(r, 5));
+            }
+            await new Promise(r => setTimeout(r, 500));
+        }
+
+        function resetNetwork() {
+            networkDiv.querySelectorAll('.neuron').forEach(neuron => {
+                neuron.style.background = '#3a3a3a';
+                neuron.style.boxShadow = 'none';
+            });
+        }
+
+        // Initialize
+        initNetwork();
+        connectionsCanvas.width = networkDiv.clientWidth;
+        connectionsCanvas.height = networkDiv.clientHeight;
+
+        document.getElementById('recognizeBtn').addEventListener('click', processImage);
+    </script>
+</body>
+</html>
