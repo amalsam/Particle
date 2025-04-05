@@ -364,7 +364,7 @@
                     const dx = other.x - this.x;
                     const dy = other.y - this.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < 1) continue;
+                    if (dist < RADIUS) continue;
 
                     const theta = Math.atan2(dy, dx);
                     const force = (G * MASS * MASS) / dist;
@@ -392,7 +392,7 @@
                     const dvy = this.momentumY - other.momentumY;
                     const dot = dvx * nx + dvy * ny;
 
-                    if (dot > 0) return;
+                   // if (dot > 0) return;
 
                     const impulse = (2 * dot) / (MASS + MASS);
 
